@@ -1,102 +1,54 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET - Export all data as JSON for backup
+// GET all categories
 export async function GET() {
   try {
-    const [transactions, categories, budgets, regularPayments, settings] = await Promise.all([
-      db.transaction.findMany({
-        include: { category: true }
-      }),
-      db.category.findMany(),
-      db.budget.findMany({
-        include: { category: true }
-      }),
-      db.regularPayment.findMany({
-        include: { category: true }
-      }),
-      db.settings.findFirst()
-    ])
-
-    const exportData = {
-      exportDate: new Date().toISOString(),
-      version: '1.0',
-      data: {
-        transactions,
-        categories,
-        budgets,
-        regularPayments,
-        settings
-      }
-    }
-
-    return new NextResponse(JSON.stringify(exportData, null, 2), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="finance-backup-${formatDate(new Date())}.json"`
-      }
+    const categories = await db.category.findMany({
+      orderBy: [{ type: 'asc' }, { name: 'asc' }]
     })
+    return NextResponse.json(categories)
   } catch (error) {
-    console.error('Error exporting data:', error)
-    return NextResponse.json({ error: 'Failed to export data' }, { status: 500 })
+    console.error('Error fetching categories:', error)
+    return NextResponse.json({ error: 'Failed to fetch categories' }, { status: 500 })
   }
 }
 
-// POST - Export transactions as CSV
+// POST create a new category
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { month } = body
+    const { name, icon, color, isDefault, type, expenseType } = body
 
-    const where: { date?: { gte: Date; lte: Date } } = {}
-
-    if (month) {
-      const [year, monthNum] = month.split('-').map(Number)
-      const startDate = new Date(year, monthNum - 1, 1)
-      const endDate = new Date(year, monthNum, 0, 23, 59, 59)
-      where.date = { gte: startDate, lte: endDate }
+    // Validate required fields
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return NextResponse.json({ error: 'Название категории обязательно' }, { status: 400 })
     }
 
-    const transactions = await db.transaction.findMany({
-      where,
-      include: { category: true },
-      orderBy: { date: 'desc' }
-    })
-
-    // Create CSV header
-    const headers = ['Дата', 'Тип', 'Сумма', 'Валюта', 'Категория', 'Комментарий']
-    
-    // Create CSV rows
-    const rows = transactions.map(t => [
-      formatDate(new Date(t.date)),
-      t.type === 'income' ? 'Доход' : 'Расход',
-      t.amount.toFixed(2),
-      t.currency,
-      t.category.name,
-      t.comment || ''
-    ])
-
-    const csv = [
-      headers.join(';'),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
-    ].join('\n')
-
-    // Add BOM for Excel compatibility with Cyrillic
-    const bom = '\uFEFF'
-    const csvContent = bom + csv
-
-    return new NextResponse(csvContent, {
-      headers: {
-        'Content-Type': 'text/csv;charset=utf-8',
-        'Content-Disposition': `attachment; filename="transactions${month ? `-${month}` : ''}.csv"`
+    // Create category with proper data
+    const category = await db.category.create({
+      data: {
+        name: name.trim(),
+        icon: icon || null,
+        color: color || null,
+        isDefault: isDefault === true,
+        type: type || 'expense',
+        expenseType: expenseType || 'variable'
       }
     })
-  } catch (error) {
-    console.error('Error exporting CSV:', error)
-    return NextResponse.json({ error: 'Failed to export CSV' }, { status: 500 })
-  }
-}
 
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]
+    return NextResponse.json(category)
+  } catch (error: unknown) {
+    console.error('Error creating category:', error)
+    
+    // Check for unique constraint violation or other specific errors
+    if (error instanceof Error) {
+      if (error.message.includes('Unique constraint')) {
+        return NextResponse.json({ error: 'Категория с таким названием уже существует' }, { status: 400 })
+      }
+      return NextResponse.json({ error: `Ошибка базы данных: ${error.message}` }, { status: 500 })
+    }
+    
+    return NextResponse.json({ error: 'Неизвестная ошибка при создании категории' }, { status: 500 })
+  }
 }

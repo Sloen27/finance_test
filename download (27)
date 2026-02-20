@@ -1,127 +1,58 @@
+"use client"
+
 import * as React from "react"
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  MoreHorizontalIcon,
-} from "lucide-react"
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 
 import { cn } from "@/lib/utils"
-import { Button, buttonVariants } from "@/components/ui/button"
 
-function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
+function ScrollArea({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
   return (
-    <nav
-      role="navigation"
-      aria-label="pagination"
-      data-slot="pagination"
-      className={cn("mx-auto flex w-full justify-center", className)}
+    <ScrollAreaPrimitive.Root
+      data-slot="scroll-area"
+      className={cn("relative", className)}
       {...props}
-    />
+    >
+      <ScrollAreaPrimitive.Viewport
+        data-slot="scroll-area-viewport"
+        className="focus-visible:ring-ring/50 size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1"
+      >
+        {children}
+      </ScrollAreaPrimitive.Viewport>
+      <ScrollBar />
+      <ScrollAreaPrimitive.Corner />
+    </ScrollAreaPrimitive.Root>
   )
 }
 
-function PaginationContent({
+function ScrollBar({
   className,
+  orientation = "vertical",
   ...props
-}: React.ComponentProps<"ul">) {
+}: React.ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
   return (
-    <ul
-      data-slot="pagination-content"
-      className={cn("flex flex-row items-center gap-1", className)}
-      {...props}
-    />
-  )
-}
-
-function PaginationItem({ ...props }: React.ComponentProps<"li">) {
-  return <li data-slot="pagination-item" {...props} />
-}
-
-type PaginationLinkProps = {
-  isActive?: boolean
-} & Pick<React.ComponentProps<typeof Button>, "size"> &
-  React.ComponentProps<"a">
-
-function PaginationLink({
-  className,
-  isActive,
-  size = "icon",
-  ...props
-}: PaginationLinkProps) {
-  return (
-    <a
-      aria-current={isActive ? "page" : undefined}
-      data-slot="pagination-link"
-      data-active={isActive}
+    <ScrollAreaPrimitive.ScrollAreaScrollbar
+      data-slot="scroll-area-scrollbar"
+      orientation={orientation}
       className={cn(
-        buttonVariants({
-          variant: isActive ? "outline" : "ghost",
-          size,
-        }),
+        "flex touch-none p-px transition-colors select-none",
+        orientation === "vertical" &&
+          "h-full w-2.5 border-l border-l-transparent",
+        orientation === "horizontal" &&
+          "h-2.5 flex-col border-t border-t-transparent",
         className
       )}
       {...props}
-    />
-  )
-}
-
-function PaginationPrevious({
-  className,
-  ...props
-}: React.ComponentProps<typeof PaginationLink>) {
-  return (
-    <PaginationLink
-      aria-label="Go to previous page"
-      size="default"
-      className={cn("gap-1 px-2.5 sm:pl-2.5", className)}
-      {...props}
     >
-      <ChevronLeftIcon />
-      <span className="hidden sm:block">Previous</span>
-    </PaginationLink>
+      <ScrollAreaPrimitive.ScrollAreaThumb
+        data-slot="scroll-area-thumb"
+        className="bg-border relative flex-1 rounded-full"
+      />
+    </ScrollAreaPrimitive.ScrollAreaScrollbar>
   )
 }
 
-function PaginationNext({
-  className,
-  ...props
-}: React.ComponentProps<typeof PaginationLink>) {
-  return (
-    <PaginationLink
-      aria-label="Go to next page"
-      size="default"
-      className={cn("gap-1 px-2.5 sm:pr-2.5", className)}
-      {...props}
-    >
-      <span className="hidden sm:block">Next</span>
-      <ChevronRightIcon />
-    </PaginationLink>
-  )
-}
-
-function PaginationEllipsis({
-  className,
-  ...props
-}: React.ComponentProps<"span">) {
-  return (
-    <span
-      aria-hidden
-      data-slot="pagination-ellipsis"
-      className={cn("flex size-9 items-center justify-center", className)}
-      {...props}
-    >
-      <MoreHorizontalIcon className="size-4" />
-      <span className="sr-only">More pages</span>
-    </span>
-  )
-}
-
-export {
-  Pagination,
-  PaginationContent,
-  PaginationLink,
-  PaginationItem,
-  PaginationPrevious,
-  PaginationNext,
-  PaginationEllipsis,
-}
+export { ScrollArea, ScrollBar }

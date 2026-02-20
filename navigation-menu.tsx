@@ -1,63 +1,43 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET all transactions with optional filters
-export async function GET(request: Request) {
+// GET a single transaction
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { searchParams } = new URL(request.url)
-    const month = searchParams.get('month') // Format: YYYY-MM
-    const categoryId = searchParams.get('categoryId')
-    const type = searchParams.get('type') // income or expense
-    const currency = searchParams.get('currency')
-
-    const where: {
-      date?: { gte: Date; lte: Date }
-      categoryId?: string
-      type?: string
-      currency?: string
-    } = {}
-
-    if (month) {
-      const startDate = new Date(`${month}-01T00:00:00.000Z`)
-      const endDate = new Date(startDate)
-      endDate.setMonth(endDate.getMonth() + 1)
-      where.date = { gte: startDate, lte: endDate }
-    }
-
-    if (categoryId) {
-      where.categoryId = categoryId
-    }
-
-    if (type) {
-      where.type = type
-    }
-
-    if (currency) {
-      where.currency = currency
-    }
-
-    const transactions = await db.transaction.findMany({
-      where,
+    const { id } = await params
+    const transaction = await db.transaction.findUnique({
+      where: { id },
       include: {
         category: true
-      },
-      orderBy: { date: 'desc' }
+      }
     })
 
-    return NextResponse.json(transactions)
+    if (!transaction) {
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(transaction)
   } catch (error) {
-    console.error('Error fetching transactions:', error)
-    return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 })
+    console.error('Error fetching transaction:', error)
+    return NextResponse.json({ error: 'Failed to fetch transaction' }, { status: 500 })
   }
 }
 
-// POST create a new transaction
-export async function POST(request: Request) {
+// PUT update a transaction
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { type, amount, currency, categoryId, date, comment } = body
 
-    const transaction = await db.transaction.create({
+    const transaction = await db.transaction.update({
+      where: { id },
       data: {
         type,
         amount: parseFloat(amount),
@@ -73,7 +53,26 @@ export async function POST(request: Request) {
 
     return NextResponse.json(transaction)
   } catch (error) {
-    console.error('Error creating transaction:', error)
-    return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
+    console.error('Error updating transaction:', error)
+    return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
+  }
+}
+
+// DELETE a transaction
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    await db.transaction.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting transaction:', error)
+    return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 })
   }
 }

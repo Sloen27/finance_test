@@ -1,28 +1,51 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { hashPassword } from '@/lib/auth'
 
-export async function GET() {
+export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    const { password, confirmPassword } = await request.json()
 
-    // Check if password is set up
+    if (!password || typeof password !== 'string') {
+      return NextResponse.json({ error: 'Введите пароль' }, { status: 400 })
+    }
+
+    if (password.length < 4) {
+      return NextResponse.json({ error: 'Пароль должен быть не менее 4 символов' }, { status: 400 })
+    }
+
+    if (password !== confirmPassword) {
+      return NextResponse.json({ error: 'Пароли не совпадают' }, { status: 400 })
+    }
+
+    // Check if password is already set
     const settings = await db.settings.findFirst()
-    const needsSetup = !settings?.passwordHash
 
-    if (!session) {
-      return NextResponse.json({
-        authenticated: false,
-        needsSetup
+    if (settings?.passwordHash) {
+      return NextResponse.json({ error: 'Пароль уже установлен. Используйте страницу входа.' }, { status: 400 })
+    }
+
+    // Hash and save password
+    const passwordHash = hashPassword(password)
+
+    if (settings) {
+      await db.settings.update({
+        where: { id: settings.id },
+        data: { passwordHash }
+      })
+    } else {
+      await db.settings.create({
+        data: {
+          passwordHash,
+          rubToUsdRate: 0.011,
+          theme: 'light'
+        }
       })
     }
 
-    return NextResponse.json({
-      authenticated: true,
-      needsSetup
-    })
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Auth check error:', error)
-    return NextResponse.json({ authenticated: false, needsSetup: true })
+    console.error('Setup error:', error)
+    return NextResponse.json({ error: 'Ошибка при настройке' }, { status: 500 })
   }
 }

@@ -1,97 +1,65 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET a single category
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// GET all budgets with optional filter by month
+export async function GET(request: Request) {
   try {
-    const { id } = await params
-    const category = await db.category.findUnique({
-      where: { id }
-    })
+    const { searchParams } = new URL(request.url)
+    const month = searchParams.get('month') // Format: YYYY-MM
 
-    if (!category) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+    const where: { month?: string } = {}
+
+    if (month) {
+      where.month = month
     }
 
-    return NextResponse.json(category)
+    const budgets = await db.budget.findMany({
+      where,
+      include: {
+        category: true
+      },
+      orderBy: { category: { name: 'asc' } }
+    })
+
+    return NextResponse.json(budgets)
   } catch (error) {
-    console.error('Error fetching category:', error)
-    return NextResponse.json({ error: 'Failed to fetch category' }, { status: 500 })
+    console.error('Error fetching budgets:', error)
+    return NextResponse.json({ error: 'Failed to fetch budgets' }, { status: 500 })
   }
 }
 
-// PUT update a category
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// POST create a new budget
+export async function POST(request: Request) {
   try {
-    const { id } = await params
     const body = await request.json()
-    const { name, icon, color, type, expenseType } = body
+    const { categoryId, amount, currency, month } = body
 
-    // Get existing category to preserve isDefault
-    const existingCategory = await db.category.findUnique({ where: { id } })
+    // Check if budget already exists for this category and month
+    const existing = await db.budget.findFirst({
+      where: { categoryId, month }
+    })
 
-    const category = await db.category.update({
-      where: { id },
+    if (existing) {
+      return NextResponse.json({ 
+        error: 'Budget already exists for this category and month' 
+      }, { status: 400 })
+    }
+
+    const budget = await db.budget.create({
       data: {
-        name,
-        icon: icon || null,
-        color: color || null,
-        type: type || existingCategory?.type || 'expense',
-        expenseType: expenseType || 'variable',
-        isDefault: existingCategory?.isDefault ?? false
+        categoryId,
+        amount: parseFloat(amount),
+        currency: currency || 'RUB',
+        month
+      },
+      include: {
+        category: true
       }
     })
 
-    return NextResponse.json(category)
+    return NextResponse.json(budget)
   } catch (error) {
-    console.error('Error updating category:', error)
-    return NextResponse.json({ error: 'Failed to update category' }, { status: 500 })
-  }
-}
-
-// DELETE a category
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-
-    // Check if category has transactions
-    const transactions = await db.transaction.findFirst({
-      where: { categoryId: id }
-    })
-
-    if (transactions) {
-      return NextResponse.json({ 
-        error: 'Cannot delete category with transactions. Please reassign transactions first.' 
-      }, { status: 400 })
-    }
-
-    // Check if category has budgets
-    const budgets = await db.budget.findFirst({
-      where: { categoryId: id }
-    })
-
-    if (budgets) {
-      return NextResponse.json({ 
-        error: 'Cannot delete category with budgets. Please delete budgets first.' 
-      }, { status: 400 })
-    }
-
-    await db.category.delete({
-      where: { id }
-    })
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Error deleting category:', error)
-    return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 })
+    console.error('Error creating budget:', error)
+    return NextResponse.json({ error: 'Failed to create budget' }, { status: 500 })
   }
 }

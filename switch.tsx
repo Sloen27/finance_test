@@ -1,25 +1,13 @@
-"use client"
+import { cn } from "@/lib/utils"
 
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, ToasterProps } from "sonner"
-
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
+function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-        } as React.CSSProperties
-      }
+    <div
+      data-slot="skeleton"
+      className={cn("bg-accent animate-pulse rounded-md", className)}
       {...props}
     />
   )
 }
 
-export { Toaster }
+export { Skeleton }

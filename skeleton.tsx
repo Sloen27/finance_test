@@ -1,51 +1,43 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET all budgets with optional filter by month
-export async function GET(request: Request) {
+// GET a single budget
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { searchParams } = new URL(request.url)
-    const month = searchParams.get('month') // Format: YYYY-MM
-
-    const where: { month?: string } = {}
-
-    if (month) {
-      where.month = month
-    }
-
-    const budgets = await db.budget.findMany({
-      where,
+    const { id } = await params
+    const budget = await db.budget.findUnique({
+      where: { id },
       include: {
         category: true
-      },
-      orderBy: { category: { name: 'asc' } }
+      }
     })
 
-    return NextResponse.json(budgets)
+    if (!budget) {
+      return NextResponse.json({ error: 'Budget not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(budget)
   } catch (error) {
-    console.error('Error fetching budgets:', error)
-    return NextResponse.json({ error: 'Failed to fetch budgets' }, { status: 500 })
+    console.error('Error fetching budget:', error)
+    return NextResponse.json({ error: 'Failed to fetch budget' }, { status: 500 })
   }
 }
 
-// POST create a new budget
-export async function POST(request: Request) {
+// PUT update a budget
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { categoryId, amount, currency, month } = body
 
-    // Check if budget already exists for this category and month
-    const existing = await db.budget.findFirst({
-      where: { categoryId, month }
-    })
-
-    if (existing) {
-      return NextResponse.json({ 
-        error: 'Budget already exists for this category and month' 
-      }, { status: 400 })
-    }
-
-    const budget = await db.budget.create({
+    const budget = await db.budget.update({
+      where: { id },
       data: {
         categoryId,
         amount: parseFloat(amount),
@@ -59,7 +51,26 @@ export async function POST(request: Request) {
 
     return NextResponse.json(budget)
   } catch (error) {
-    console.error('Error creating budget:', error)
-    return NextResponse.json({ error: 'Failed to create budget' }, { status: 500 })
+    console.error('Error updating budget:', error)
+    return NextResponse.json({ error: 'Failed to update budget' }, { status: 500 })
+  }
+}
+
+// DELETE a budget
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    await db.budget.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting budget:', error)
+    return NextResponse.json({ error: 'Failed to delete budget' }, { status: 500 })
   }
 }

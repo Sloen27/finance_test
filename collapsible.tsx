@@ -1,44 +1,79 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { verifyPassword, hashPassword } from '@/lib/auth'
 
-export async function POST(request: Request) {
+// GET all transactions with optional filters
+export async function GET(request: Request) {
   try {
-    const { currentPassword, newPassword } = await request.json()
+    const { searchParams } = new URL(request.url)
+    const month = searchParams.get('month') // Format: YYYY-MM
+    const categoryId = searchParams.get('categoryId')
+    const type = searchParams.get('type') // income or expense
+    const currency = searchParams.get('currency')
 
-    if (!currentPassword || !newPassword) {
-      return NextResponse.json({ error: 'Заполните все поля' }, { status: 400 })
+    const where: {
+      date?: { gte: Date; lte: Date }
+      categoryId?: string
+      type?: string
+      currency?: string
+    } = {}
+
+    if (month) {
+      const startDate = new Date(`${month}-01T00:00:00.000Z`)
+      const endDate = new Date(startDate)
+      endDate.setMonth(endDate.getMonth() + 1)
+      where.date = { gte: startDate, lte: endDate }
     }
 
-    if (newPassword.length < 4) {
-      return NextResponse.json({ error: 'Новый пароль должен быть не менее 4 символов' }, { status: 400 })
+    if (categoryId) {
+      where.categoryId = categoryId
     }
 
-    // Get current settings
-    const settings = await db.settings.findFirst()
-
-    if (!settings || !settings.passwordHash) {
-      return NextResponse.json({ error: 'Пароль не настроен' }, { status: 400 })
+    if (type) {
+      where.type = type
     }
 
-    // Verify current password
-    const isValid = verifyPassword(currentPassword, settings.passwordHash)
-
-    if (!isValid) {
-      return NextResponse.json({ error: 'Неверный текущий пароль' }, { status: 401 })
+    if (currency) {
+      where.currency = currency
     }
 
-    // Hash new password and save
-    const newPasswordHash = hashPassword(newPassword)
-
-    await db.settings.update({
-      where: { id: settings.id },
-      data: { passwordHash: newPasswordHash }
+    const transactions = await db.transaction.findMany({
+      where,
+      include: {
+        category: true
+      },
+      orderBy: { date: 'desc' }
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json(transactions)
   } catch (error) {
-    console.error('Change password error:', error)
-    return NextResponse.json({ error: 'Ошибка при смене пароля' }, { status: 500 })
+    console.error('Error fetching transactions:', error)
+    return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 })
+  }
+}
+
+// POST create a new transaction
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const { type, amount, currency, categoryId, date, comment } = body
+
+    const transaction = await db.transaction.create({
+      data: {
+        type,
+        amount: parseFloat(amount),
+        currency: currency || 'RUB',
+        categoryId,
+        date: new Date(date),
+        comment: comment || null
+      },
+      include: {
+        category: true
+      }
+    })
+
+    return NextResponse.json(transaction)
+  } catch (error) {
+    console.error('Error creating transaction:', error)
+    return NextResponse.json({ error: 'Failed to create transaction' }, { status: 500 })
   }
 }

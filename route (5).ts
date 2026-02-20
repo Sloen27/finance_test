@@ -1,119 +1,296 @@
-import { cookies } from 'next/headers'
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto'
+'use client'
 
-const SECRET_KEY = process.env.AUTH_SECRET || 'your-secret-key-change-in-production'
-const ALGORITHM = 'aes-256-cbc'
+import { useEffect, useState } from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useFinanceStore } from '@/store/finance'
+import { Dashboard } from '@/components/finance/Dashboard'
+import { Transactions } from '@/components/finance/Transactions'
+import { Categories } from '@/components/finance/Categories'
+import { Budgets } from '@/components/finance/Budgets'
+import { RegularPayments } from '@/components/finance/RegularPayments'
+import { Analytics } from '@/components/finance/Analytics'
+import { Settings } from '@/components/finance/Settings'
+import { Accounts } from '@/components/finance/Accounts'
+import { FinancialGoals } from '@/components/finance/FinancialGoals'
+import { Investments } from '@/components/finance/Investments'
+import {
+  LayoutDashboard,
+  Receipt,
+  Tags,
+  PiggyBank,
+  Calendar,
+  BarChart3,
+  Settings as SettingsIcon,
+  Loader2,
+  Wallet,
+  Building2,
+  Target,
+  TrendingUp,
+  LogOut
+} from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { subMonths, format } from 'date-fns'
+import { ru } from 'date-fns/locale'
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 
-// Derive a key from the secret
-const getEncryptionKey = () => {
-  return scryptSync(SECRET_KEY, 'salt', 32)
-}
+export default function Home() {
+  const {
+    categories,
+    transactions,
+    budgets,
+    regularPayments,
+    settings,
+    accounts,
+    goals,
+    investments,
+    currentMonth,
+    setCategories,
+    setTransactions,
+    setBudgets,
+    setRegularPayments,
+    setSettings,
+    setAccounts,
+    setGoals,
+    setInvestments,
+    setCurrentMonth,
+    isLoading,
+    setIsLoading
+  } = useFinanceStore()
 
-// Encrypt session data (Node.js runtime only)
-export function encryptSession(data: { userId: string; expiresAt: number }): string {
-  const key = getEncryptionKey()
-  const iv = randomBytes(16)
-  const cipher = createCipheriv(ALGORITHM, key, iv)
+  const [isInitialized, setIsInitialized] = useState(false)
 
-  let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex')
-  encrypted += cipher.final('hex')
+  // Generate month options (last 12 months)
+  const monthOptions = Array.from({ length: 12 }, (_, i) => {
+    const date = subMonths(new Date(), i)
+    return {
+      value: format(date, 'yyyy-MM'),
+      label: format(date, 'LLLL yyyy', { locale: ru })
+    }
+  })
 
-  return iv.toString('hex') + ':' + encrypted
-}
+  // Initialize app and fetch all data
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // Check initialization status
+        const initResponse = await fetch('/api/init')
+        const initData = await initResponse.json()
 
-// Decrypt session data (Node.js runtime only)
-export function decryptSession(token: string): { userId: string; expiresAt: number } | null {
-  try {
-    const key = getEncryptionKey()
-    const [ivHex, encrypted] = token.split(':')
+        // Initialize default categories if needed
+        if (!initData.initialized) {
+          await fetch('/api/init', { method: 'POST' })
+        }
 
-    if (!ivHex || !encrypted) return null
+        // Fetch all data in parallel
+        const [categoriesRes, transactionsRes, budgetsRes, regularPaymentsRes, settingsRes, accountsRes, goalsRes, investmentsRes] = await Promise.all([
+          fetch('/api/categories'),
+          fetch('/api/transactions'),
+          fetch('/api/budgets'),
+          fetch('/api/regular-payments'),
+          fetch('/api/settings'),
+          fetch('/api/accounts'),
+          fetch('/api/goals'),
+          fetch('/api/investments')
+        ])
 
-    const iv = Buffer.from(ivHex, 'hex')
-    const decipher = createDecipheriv(ALGORITHM, key, iv)
+        const [categoriesData, transactionsData, budgetsData, regularPaymentsData, settingsData, accountsData, goalsData, investmentsData] = await Promise.all([
+          categoriesRes.json(),
+          transactionsRes.json(),
+          budgetsRes.json(),
+          regularPaymentsRes.json(),
+          settingsRes.json(),
+          accountsRes.json(),
+          goalsRes.json(),
+          investmentsRes.json()
+        ])
 
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
-    decrypted += decipher.final('utf8')
+        // Ensure all data is arrays (handle error objects from API)
+        setCategories(Array.isArray(categoriesData) ? categoriesData : [])
+        setTransactions(Array.isArray(transactionsData) ? transactionsData : [])
+        setBudgets(Array.isArray(budgetsData) ? budgetsData : [])
+        setRegularPayments(Array.isArray(regularPaymentsData) ? regularPaymentsData : [])
+        setSettings(settingsData && !settingsData.error ? settingsData : null)
+        setAccounts(Array.isArray(accountsData) ? accountsData : [])
+        setGoals(Array.isArray(goalsData) ? goalsData : [])
+        setInvestments(Array.isArray(investmentsData) ? investmentsData : [])
 
-    const data = JSON.parse(decrypted)
+        // Apply theme
+        if (settingsData && settingsData.theme) {
+          document.documentElement.classList.remove('light', 'dark')
+          document.documentElement.classList.add(settingsData.theme)
+        }
 
-    // Check if session expired
-    if (data.expiresAt < Date.now()) {
-      return null
+        setIsInitialized(true)
+      } catch (error) {
+        console.error('Error initializing app:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
 
-    return data
-  } catch {
-    return null
+    initializeApp()
+  }, [])
+
+  // Show loading state
+  if (isLoading || !isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-2">
+            <Wallet className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl font-bold">Финансы</h1>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Загрузка...</span>
+          </div>
+        </div>
+      </div>
+    )
   }
-}
 
-// Simple session verification for Edge Runtime (middleware)
-export function verifySessionSimple(token: string): boolean {
-  try {
-    // Just check if token has the right format and is not expired
-    const parts = token.split(':')
-    if (parts.length !== 2) return false
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Wallet className="h-6 w-6 text-primary" />
+              <h1 className="text-xl font-bold">Персональные финансы</h1>
+            </div>
 
-    // Try to extract and validate expiry from the token
-    // Format: iv:encrypted_data where encrypted_data contains { userId, expiresAt }
-    // For Edge, we'll do a simple format check
-    // The actual decryption will happen in API routes
+            <div className="flex items-center gap-4">
+              {/* Month Selector */}
+              <Select value={currentMonth} onValueChange={setCurrentMonth}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Выберите месяц" />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-    // Check if it looks like a valid token (has iv and data parts)
-    if (!parts[0] || !parts[1]) return false
-    if (parts[0].length !== 32) return false // IV should be 16 bytes = 32 hex chars
+              {/* Logout Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  await fetch('/api/auth/logout', { method: 'POST' })
+                  window.location.href = '/login'
+                }}
+                title="Выйти"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-    return true
-  } catch {
-    return false
-  }
-}
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-6">
+        <Tabs defaultValue="dashboard" className="space-y-6">
+          {/* Scrollable Tabs */}
+          <ScrollArea className="w-full whitespace-nowrap">
+            <TabsList className="inline-flex w-max">
+              <TabsTrigger value="dashboard" className="flex items-center gap-2 px-4">
+                <LayoutDashboard className="h-4 w-4" />
+                <span>Обзор</span>
+              </TabsTrigger>
+              <TabsTrigger value="transactions" className="flex items-center gap-2 px-4">
+                <Receipt className="h-4 w-4" />
+                <span>Транзакции</span>
+              </TabsTrigger>
+              <TabsTrigger value="accounts" className="flex items-center gap-2 px-4">
+                <Building2 className="h-4 w-4" />
+                <span>Счета</span>
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="flex items-center gap-2 px-4">
+                <Tags className="h-4 w-4" />
+                <span>Категории</span>
+              </TabsTrigger>
+              <TabsTrigger value="budgets" className="flex items-center gap-2 px-4">
+                <PiggyBank className="h-4 w-4" />
+                <span>Бюджеты</span>
+              </TabsTrigger>
+              <TabsTrigger value="regular" className="flex items-center gap-2 px-4">
+                <Calendar className="h-4 w-4" />
+                <span>Платежи</span>
+              </TabsTrigger>
+              <TabsTrigger value="goals" className="flex items-center gap-2 px-4">
+                <Target className="h-4 w-4" />
+                <span>Цели</span>
+              </TabsTrigger>
+              <TabsTrigger value="investments" className="flex items-center gap-2 px-4">
+                <TrendingUp className="h-4 w-4" />
+                <span>Инвестиции</span>
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex items-center gap-2 px-4">
+                <BarChart3 className="h-4 w-4" />
+                <span>Аналитика</span>
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="flex items-center gap-2 px-4">
+                <SettingsIcon className="h-4 w-4" />
+                <span>Настройки</span>
+              </TabsTrigger>
+            </TabsList>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
 
-// Create session cookie (Node.js runtime only)
-export async function createSession(userId: string): Promise<void> {
-  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+          <TabsContent value="dashboard">
+            <Dashboard />
+          </TabsContent>
 
-  const token = encryptSession({ userId, expiresAt })
+          <TabsContent value="transactions">
+            <Transactions />
+          </TabsContent>
 
-  const cookieStore = await cookies()
-  cookieStore.set('session', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60, // 7 days
-    path: '/',
-  })
-}
+          <TabsContent value="accounts">
+            <Accounts />
+          </TabsContent>
 
-// Get current session (Node.js runtime only)
-export async function getSession(): Promise<{ userId: string } | null> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('session')?.value
+          <TabsContent value="categories">
+            <Categories />
+          </TabsContent>
 
-  if (!token) return null
+          <TabsContent value="budgets">
+            <Budgets />
+          </TabsContent>
 
-  return decryptSession(token)
-}
+          <TabsContent value="regular">
+            <RegularPayments />
+          </TabsContent>
 
-// Delete session (logout) - works in both runtimes
-export async function deleteSession(): Promise<void> {
-  const cookieStore = await cookies()
-  cookieStore.delete('session')
-}
+          <TabsContent value="goals">
+            <FinancialGoals />
+          </TabsContent>
 
-// Simple password verification
-export function verifyPassword(password: string, hashedPassword: string): boolean {
-  const [salt, hash] = hashedPassword.split(':')
-  if (!salt || !hash) return false
+          <TabsContent value="investments">
+            <Investments />
+          </TabsContent>
 
-  const key = scryptSync(password, salt, 64)
-  return key.toString('hex') === hash
-}
+          <TabsContent value="analytics">
+            <Analytics />
+          </TabsContent>
 
-// Hash password
-export function hashPassword(password: string): string {
-  const salt = randomBytes(16).toString('hex')
-  const key = scryptSync(password, salt, 64)
-  return salt + ':' + key.toString('hex')
+          <TabsContent value="settings">
+            <Settings />
+          </TabsContent>
+        </Tabs>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t py-4 mt-8">
+        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+          Персональный финансовый учет © {new Date().getFullYear()}
+        </div>
+      </footer>
+    </div>
+  )
 }

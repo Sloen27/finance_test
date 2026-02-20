@@ -1,51 +1,44 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { hashPassword } from '@/lib/auth'
+import { verifyPassword, hashPassword } from '@/lib/auth'
 
 export async function POST(request: Request) {
   try {
-    const { password, confirmPassword } = await request.json()
+    const { currentPassword, newPassword } = await request.json()
 
-    if (!password || typeof password !== 'string') {
-      return NextResponse.json({ error: 'Введите пароль' }, { status: 400 })
+    if (!currentPassword || !newPassword) {
+      return NextResponse.json({ error: 'Заполните все поля' }, { status: 400 })
     }
 
-    if (password.length < 4) {
-      return NextResponse.json({ error: 'Пароль должен быть не менее 4 символов' }, { status: 400 })
+    if (newPassword.length < 4) {
+      return NextResponse.json({ error: 'Новый пароль должен быть не менее 4 символов' }, { status: 400 })
     }
 
-    if (password !== confirmPassword) {
-      return NextResponse.json({ error: 'Пароли не совпадают' }, { status: 400 })
-    }
-
-    // Check if password is already set
+    // Get current settings
     const settings = await db.settings.findFirst()
 
-    if (settings?.passwordHash) {
-      return NextResponse.json({ error: 'Пароль уже установлен. Используйте страницу входа.' }, { status: 400 })
+    if (!settings || !settings.passwordHash) {
+      return NextResponse.json({ error: 'Пароль не настроен' }, { status: 400 })
     }
 
-    // Hash and save password
-    const passwordHash = hashPassword(password)
+    // Verify current password
+    const isValid = verifyPassword(currentPassword, settings.passwordHash)
 
-    if (settings) {
-      await db.settings.update({
-        where: { id: settings.id },
-        data: { passwordHash }
-      })
-    } else {
-      await db.settings.create({
-        data: {
-          passwordHash,
-          rubToUsdRate: 0.011,
-          theme: 'light'
-        }
-      })
+    if (!isValid) {
+      return NextResponse.json({ error: 'Неверный текущий пароль' }, { status: 401 })
     }
+
+    // Hash new password and save
+    const newPasswordHash = hashPassword(newPassword)
+
+    await db.settings.update({
+      where: { id: settings.id },
+      data: { passwordHash: newPasswordHash }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Setup error:', error)
-    return NextResponse.json({ error: 'Ошибка при настройке' }, { status: 500 })
+    console.error('Change password error:', error)
+    return NextResponse.json({ error: 'Ошибка при смене пароля' }, { status: 500 })
   }
 }

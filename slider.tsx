@@ -1,92 +1,66 @@
+"use client"
+
 import * as React from "react"
+import * as AccordionPrimitive from "@radix-ui/react-accordion"
+import { ChevronDownIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+function Accordion({
+  ...props
+}: React.ComponentProps<typeof AccordionPrimitive.Root>) {
+  return <AccordionPrimitive.Root data-slot="accordion" {...props} />
+}
+
+function AccordionItem({
+  className,
+  ...props
+}: React.ComponentProps<typeof AccordionPrimitive.Item>) {
   return (
-    <div
-      data-slot="card"
-      className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
-        className
-      )}
+    <AccordionPrimitive.Item
+      data-slot="accordion-item"
+      className={cn("border-b last:border-b-0", className)}
       {...props}
     />
   )
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+function AccordionTrigger({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof AccordionPrimitive.Trigger>) {
   return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
-        className
-      )}
-      {...props}
-    />
+    <AccordionPrimitive.Header className="flex">
+      <AccordionPrimitive.Trigger
+        data-slot="accordion-trigger"
+        className={cn(
+          "focus-visible:border-ring focus-visible:ring-ring/50 flex flex-1 items-start justify-between gap-4 rounded-md py-4 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&[data-state=open]>svg]:rotate-180",
+          className
+        )}
+        {...props}
+      >
+        {children}
+        <ChevronDownIcon className="text-muted-foreground pointer-events-none size-4 shrink-0 translate-y-0.5 transition-transform duration-200" />
+      </AccordionPrimitive.Trigger>
+    </AccordionPrimitive.Header>
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+function AccordionContent({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof AccordionPrimitive.Content>) {
   return (
-    <div
-      data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+    <AccordionPrimitive.Content
+      data-slot="accordion-content"
+      className="data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down overflow-hidden text-sm"
       {...props}
-    />
+    >
+      <div className={cn("pt-0 pb-4", className)}>{children}</div>
+    </AccordionPrimitive.Content>
   )
 }
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-description"
-      className={cn("text-muted-foreground text-sm", className)}
-      {...props}
-    />
-  )
-}
-
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-6", className)}
-      {...props}
-    />
-  )
-}
-
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
-      {...props}
-    />
-  )
-}
-
-export {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardAction,
-  CardDescription,
-  CardContent,
-}
+export { Accordion, AccordionItem, AccordionTrigger, AccordionContent }
